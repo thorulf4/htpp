@@ -103,9 +103,10 @@ namespace json{
         constexpr void serialize(std::stringstream& s, const T& object){
             s << '[';
             auto it = std::begin(object);
-            if(it != std::end(object)){
+            const auto end = std::end(object);
+            if(it != end){
                 serialize_field(s, *it);
-                while(++it != std::end(object)){
+                while(++it != end){
                     s << ',';
                     serialize_field(s, *it);
                 }
@@ -120,7 +121,7 @@ namespace json{
         explicit From(const auto& object) {
             std::stringstream s;
             inner::serialize(s, object);
-            content = {htpp::ContentType::TextJson, std::move(s).str()};
+            content = {htpp::ContentType::ApplicationJson, std::move(s).str()};
         }
     };
 }

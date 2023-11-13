@@ -19,7 +19,7 @@ namespace htpp{
 
     enum class ContentType{
         TextHtml,
-        TextJson
+        ApplicationJson
     };
 
     struct Content{

@@ -53,7 +53,7 @@ static std::string_view to_str(ContentType type){
     using enum ContentType;
     switch(type){
         case TextHtml: return "text/html";
-        case TextJson: return "text/json";
+        case ApplicationJson: return "application/json";
         default: std::unreachable();
     }
 }
