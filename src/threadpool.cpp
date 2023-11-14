@@ -5,6 +5,7 @@ void ThreadPool::thread_loop(){
         Job job;
         {
             auto lock = std::unique_lock{queue_mutex};
+            // queue_condition.notify_one();
             mutex_condition.wait(lock, [this] { return !jobs.empty() || should_terminate; });
             if(should_terminate)
                 return;
@@ -16,8 +17,8 @@ void ThreadPool::thread_loop(){
     }
 }
 
-ThreadPool::ThreadPool(){
-    auto max_threads = std::thread::hardware_concurrency();
+ThreadPool::ThreadPool(uint16_t max_connections): max_connections{max_connections} {
+    auto max_threads = std::thread::hardware_concurrency()-1;
     while(max_threads-->0)
         threads.emplace_back(&ThreadPool::thread_loop, this);
 }
@@ -32,4 +33,9 @@ void ThreadPool::queue_task(Job job){
     auto lock = std::unique_lock{queue_mutex};
     jobs.push(std::move(job));
     mutex_condition.notify_one();
+}
+
+void ThreadPool::wait_for_space(){
+    auto lock = std::unique_lock{queue_mutex};
+    queue_condition.wait(lock, [this](){ return jobs.size() < max_connections; });
 }

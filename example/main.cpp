@@ -25,6 +25,15 @@ htpp::Response handle_time(std::string_view){
     return json::From(time);
 }
 
+struct Msg{
+    using json_names = json::key_name<"message">;
+    std::string_view msg;
+};
+
+htpp::Response handle_json(std::string_view){
+    return json::From(Msg{"Hello, World!"});
+}
+
 class Logger : public htpp::Middleware{
     std::ostream& os;
     std::mutex stream_lock;
@@ -41,8 +50,9 @@ int main(){
 
     htpp::Server{}
         .static_files("/", STATIC_FILE_DIR)
-        .add_middleware<Logger>(std::cout)
+        // .add_middleware<Logger>(std::cout)
         .set_routes({
+            {GET, "/json", handle_json},
             {GET, "/api/time", handle_time}
         })
         .run();

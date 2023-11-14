@@ -1,6 +1,7 @@
 #include "connection.h"
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 
 using asio::ip::tcp;
 using namespace std::literals::string_view_literals;
@@ -59,6 +60,13 @@ static std::string_view to_str(ContentType type){
 }
 
 void HttpConnection::receive(){
+    while(socket.available() == 0){
+        if(connection_keepalive < std::time(nullptr)){
+            std::cout << "Timed out\n";
+            throw std::logic_error{"Timed out"};
+        }
+    }
+
     auto count = socket.receive(asio::buffer(end, bytes_left));
     end += count;
     bytes_left -= count;
@@ -104,38 +112,86 @@ htpp::Request HttpConnection::parse_request(){
 
 std::string_view HttpConnection::receive_header_value(){
     auto start = it;
-    find('\r');
+    find_first_of("\r\n"sv);
     auto str = std::string_view{start, it};
-    it += 2;
+    it += *it == '\r' ? 2 : 1;
     return str;
 };
 
 void HttpConnection::receive_headers(){
-    connection_keepalive = false; // Default
     while(true){
         auto key_start = it;
-        find_first_of(":\r"sv);
+        find_first_of(":\r\n"sv);
+        auto key = std::string_view{key_start, it};
         if(*it == ':'){
-            auto key = std::string_view{key_start, it};
             it += 2; // Skip : and whitespace, not entirely robust
             if(key == "Connection" && *it == 'k'){
                 auto value = receive_header_value();
-                connection_keepalive = value == "keep-alive";
-            }else{
-                find('\n');
-                it++;
+                if(value == "keep-alive"){
+                    connection_keepalive = std::time(nullptr) + keepalive_timeout;
+                }
             }
         }else{
-            it += 2; // Skip past final endline
+            it += *it == '\r'? 2 : 1; // Skip past final endline
             return;
         }
     }
 }
 
+static std::string_view weekday(const tm& time){
+    switch (time.tm_wday)
+    {
+        case 0: return "Mon";
+        case 1: return "Tue";
+        case 2: return "Wed";
+        case 3: return "Thu";
+        case 4: return "Fri";
+        case 5: return "Sat";
+        case 6: return "Sun";
+        default: std::unreachable();
+    }
+}
+
+static std::string_view month(const tm& time){
+    switch (time.tm_mon)
+    {
+        case 0: return "Jan";
+        case 1: return "Feb";
+        case 2: return "Mar";
+        case 3: return "Apr";
+        case 4: return "May";
+        case 5: return "Jun";
+        case 6: return "Jul";
+        case 7: return "Aug";
+        case 8: return "Sep";
+        case 9: return "Oct";
+        case 10: return "Nov";
+        case 11: return "Dec";
+        default: std::unreachable();
+    }
+}
+
+// Formats an integer with XX format e.g 05, 23 or 00 
+class Fmt2Int{
+    int v;
+public:
+    // Precondition: v < 100
+    explicit Fmt2Int(int v): v{v} {}
+    friend std::ostream& operator<<(std::ostream& os, const Fmt2Int& fmt){
+        if(fmt.v < 10)
+            os << '0';
+        os << fmt.v;
+        return os;
+    }
+};
+
 void HttpConnection::write_response(const Response& response){
-    std::stringstream s{};
+    auto s = std::stringstream{};
     s << "HTTP/1.1 " << response.response_code << " \r\n";
-    s << "Server: HTPP/" << HTPP_VERSION << "\r\n";  
+    s << "Server: HTPP/" << HTPP_VERSION << "\r\n";
+    auto timestamp = time(nullptr);
+    tm utc; gmtime_r(&timestamp, &utc);
+    s << "Date: " << weekday(utc) << ", " << Fmt2Int{utc.tm_mday} << ' ' << month(utc) << ' ' << (utc.tm_year + 1900) << ' ' << Fmt2Int{utc.tm_hour} << ':' << Fmt2Int{utc.tm_min} << ':' << Fmt2Int{utc.tm_sec} << " GMT\r\n";
     if(connection_keepalive){
         s << "Connection: keep-alive\r\n";
         s << "Keep-Alive: timeout=5, max=1000\r\n";
@@ -149,4 +205,8 @@ void HttpConnection::write_response(const Response& response){
     }
 
     socket.write_some(asio::buffer(s.view()));
+}
+
+HttpConnection::~HttpConnection(){
+    socket.close();
 }

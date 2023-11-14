@@ -4,14 +4,22 @@
 #include <string_view>
 
 class HttpConnection{
-    asio::ip::tcp::socket socket;
+    static constexpr int keepalive_timeout = 5;
+
     char* it;
     char* end;
     size_t bytes_left;
 public:
-    bool connection_keepalive{false};
+    asio::ip::tcp::socket socket;
+    std::time_t connection_keepalive{std::time(nullptr) + keepalive_timeout};
 
     explicit HttpConnection(asio::ip::tcp::socket socket): socket{std::move(socket)} {}
+    ~HttpConnection();
+    HttpConnection(const HttpConnection&) = delete;
+    HttpConnection& operator=(const HttpConnection&) = delete;
+    HttpConnection(HttpConnection&&) noexcept = default;
+    HttpConnection& operator=(HttpConnection&&) noexcept = default;
+
     template<size_t N>
     void set_buffer(char (& buffer)[N]){
         it = buffer;

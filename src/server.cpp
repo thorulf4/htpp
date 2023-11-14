@@ -64,7 +64,7 @@ Response Server::fire_handler(const Request& request) const {
 void Server::run() const{
     asio::io_context context;
     tcp::acceptor accepter{context, tcp::endpoint{tcp::v4(), port}};
-    ThreadPool pool;
+    ThreadPool pool{50};
 
     while(true){
         pool.queue_task([this, http = HttpConnection{accepter.accept()}] mutable {
@@ -79,11 +79,10 @@ void Server::run() const{
                         mid->on_received(request);
                     auto response = this->fire_handler(request);
                     http.write_response(response);
-                } while(http.connection_keepalive);
+                } while(http.connection_keepalive > std::time(nullptr));
             }
             catch(...){
                 http.write_response(Response{500, std::nullopt});
-                throw;
             }
         });
     }
