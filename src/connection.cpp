@@ -1,4 +1,6 @@
 #include "connection.h"
+#include "utilites.h"
+
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -6,58 +8,6 @@
 using asio::ip::tcp;
 using namespace std::literals::string_view_literals;
 using namespace htpp;
-
-static RequestType get_type(char*& data){
-    using enum RequestType;
-    switch (data[0])
-    {
-        case 'G':
-            data += 4;
-            return GET;
-        case 'H':
-            data += 5;
-            return HEAD;
-        case 'P':
-            switch (data[1])
-            {
-                case 'O':
-                    data += 5;
-                    return POST;
-                case 'U':
-                    data += 4;
-                    return PUT;
-                case 'A':
-                    data += 6;
-                    return PATCH;
-                default:
-                    throw std::logic_error{"4xx bad request type"};
-            }
-        case 'D':
-            data += 7;
-            return DELETE;
-        case 'C':
-            data += 8;
-            return CONNECT;
-        case 'O':
-            data += 8;
-            return OPTIONS;
-        case 'T':
-            data += 6;
-            return TRACE;
-        default:
-            throw std::logic_error{"4xx bad request type"};
-    }
-    std::unreachable();
-}
-
-static std::string_view to_str(ContentType type){
-    using enum ContentType;
-    switch(type){
-        case TextHtml: return "text/html";
-        case ApplicationJson: return "application/json";
-        default: std::unreachable();
-    }
-}
 
 void HttpConnection::receive(){
     while(socket.available() == 0){
@@ -125,9 +75,13 @@ void HttpConnection::receive_headers(){
         auto key = std::string_view{key_start, it};
         if(*it == ':'){
             it += 2; // Skip : and whitespace, not entirely robust
-            if(key == "Connection" && *it == 'k'){
-                auto value = receive_header_value();
-                if(value == "keep-alive"){
+            if(key == "Connection"){
+                if(*it == 'K'){
+                    auto value = receive_header_value();
+                    if(value != "keep-alive"){
+                        connection_keepalive = std::numeric_limits<std::time_t>::max();
+                    }
+                }else{
                     connection_keepalive = std::time(nullptr) + keepalive_timeout;
                 }
             }
@@ -138,52 +92,7 @@ void HttpConnection::receive_headers(){
     }
 }
 
-static std::string_view weekday(const tm& time){
-    switch (time.tm_wday)
-    {
-        case 0: return "Mon";
-        case 1: return "Tue";
-        case 2: return "Wed";
-        case 3: return "Thu";
-        case 4: return "Fri";
-        case 5: return "Sat";
-        case 6: return "Sun";
-        default: std::unreachable();
-    }
-}
 
-static std::string_view month(const tm& time){
-    switch (time.tm_mon)
-    {
-        case 0: return "Jan";
-        case 1: return "Feb";
-        case 2: return "Mar";
-        case 3: return "Apr";
-        case 4: return "May";
-        case 5: return "Jun";
-        case 6: return "Jul";
-        case 7: return "Aug";
-        case 8: return "Sep";
-        case 9: return "Oct";
-        case 10: return "Nov";
-        case 11: return "Dec";
-        default: std::unreachable();
-    }
-}
-
-// Formats an integer with XX format e.g 05, 23 or 00 
-class Fmt2Int{
-    int v;
-public:
-    // Precondition: v < 100
-    explicit Fmt2Int(int v): v{v} {}
-    friend std::ostream& operator<<(std::ostream& os, const Fmt2Int& fmt){
-        if(fmt.v < 10)
-            os << '0';
-        os << fmt.v;
-        return os;
-    }
-};
 
 void HttpConnection::write_response(const Response& response){
     auto s = std::stringstream{};
@@ -192,9 +101,11 @@ void HttpConnection::write_response(const Response& response){
     auto timestamp = time(nullptr);
     tm utc; gmtime_r(&timestamp, &utc);
     s << "Date: " << weekday(utc) << ", " << Fmt2Int{utc.tm_mday} << ' ' << month(utc) << ' ' << (utc.tm_year + 1900) << ' ' << Fmt2Int{utc.tm_hour} << ':' << Fmt2Int{utc.tm_min} << ':' << Fmt2Int{utc.tm_sec} << " GMT\r\n";
-    if(connection_keepalive){
+    if(connection_keepalive < std::numeric_limits<std::time_t>::max()){
         s << "Connection: keep-alive\r\n";
-        s << "Keep-Alive: timeout=5, max=1000\r\n";
+        s << "Keep-Alive: timeout=1, max=1000\r\n";
+    }else{
+        s << "Connection: close\r\n";
     }
     if(response.content){
         s << "Content-Type: " << to_str(response.content->type) << "\r\n";

@@ -5,7 +5,7 @@ void ThreadPool::thread_loop(){
         Job job;
         {
             auto lock = std::unique_lock{queue_mutex};
-            // queue_condition.notify_one();
+            queue_condition.notify_one();
             mutex_condition.wait(lock, [this] { return !jobs.empty() || should_terminate; });
             if(should_terminate)
                 return;
@@ -18,7 +18,7 @@ void ThreadPool::thread_loop(){
 }
 
 ThreadPool::ThreadPool(uint16_t max_connections): max_connections{max_connections} {
-    auto max_threads = std::thread::hardware_concurrency()-1;
+    auto max_threads = std::thread::hardware_concurrency() - 1;
     while(max_threads-->0)
         threads.emplace_back(&ThreadPool::thread_loop, this);
 }

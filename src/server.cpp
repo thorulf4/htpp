@@ -24,8 +24,9 @@ using namespace htpp;
 
 static auto ERROR_404 = Content{ContentType::TextHtml, "404 Not Found"};
 
-Server& Server::set_routes(std::vector<WebPoint> routes) {
-    this->routes = std::move(routes);
+Server& Server::set_routes(std::vector<WebPoint> new_routes) {
+    for(const WebPoint& route : new_routes)
+        routes[route] = route.function;
     return *this;
 }
 
@@ -47,6 +48,8 @@ static Response read_file(const std::filesystem::path& path){
 
 Response Server::fire_handler(const Request& request) const {
     if(request.url.starts_with(static_dir)){
+        if(request.url.contains(".."))
+            return {404, ERROR_404};
         auto path = static_path / request.url.substr(static_dir.size());
         if(std::filesystem::is_directory(path))
             path = path / "index.html";
@@ -54,19 +57,21 @@ Response Server::fire_handler(const Request& request) const {
             return read_file(path);
     }
 
-    auto it = std::ranges::find_if(routes, [&](const WebPoint& p){ return p.type == request.type && p.address == request.url; });
+    auto it = routes.find({request.type, request.url});
     if(it == routes.end())
         return {404, ERROR_404};
-    return it->function(request.param);
+    const WebPoint::Handler handler = it->second;
+    return handler(request.param);
 }
 
 
-void Server::run() const{
-    asio::io_context context;
+void Server::run() const {
+    asio::io_context context(std::thread::hardware_concurrency()-1);
     tcp::acceptor accepter{context, tcp::endpoint{tcp::v4(), port}};
-    ThreadPool pool{50};
+    ThreadPool pool{5000};
 
     while(true){
+        pool.wait_for_space();
         pool.queue_task([this, http = HttpConnection{accepter.accept()}] mutable {
             char read[1024*4096]; // Max request size set to 4MB
             try{
@@ -79,7 +84,7 @@ void Server::run() const{
                         mid->on_received(request);
                     auto response = this->fire_handler(request);
                     http.write_response(response);
-                } while(http.connection_keepalive > std::time(nullptr));
+                } while(http.connection_keepalive > std::time(nullptr) && http.connection_keepalive != std::numeric_limits<std::time_t>::max());
             }
             catch(...){
                 http.write_response(Response{500, std::nullopt});

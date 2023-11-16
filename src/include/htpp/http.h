@@ -54,8 +54,22 @@ namespace htpp{
         case TRACE: return "TRACE";
         case CONNECT: return "CONNECT";
         case PATCH: return "OTHER";
-        default: return "UNKNOWN";
         }
-        std::unreachable();
+        return "Unknown";
     }
+
+    struct Endpoint{
+        RequestType type;
+        std::string_view address;
+        auto operator<=>(const Endpoint&) const = default;
+    };
 }
+
+template<>
+struct std::hash<htpp::Endpoint>
+{
+    std::size_t operator()(const htpp::Endpoint& point) const noexcept
+    {
+        return std::hash<std::string_view>{}(point.address) + static_cast<std::size_t>(point.type);
+    }
+};

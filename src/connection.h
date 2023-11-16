@@ -2,9 +2,10 @@
 #include <htpp/http.h>
 #include <asio.hpp>
 #include <string_view>
+#include <limits>
 
 class HttpConnection{
-    static constexpr int keepalive_timeout = 5;
+    static constexpr int keepalive_timeout = 1;
 
     char* it;
     char* end;
