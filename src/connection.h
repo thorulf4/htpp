@@ -5,7 +5,7 @@
 #include <limits>
 
 class HttpConnection{
-    static constexpr int keepalive_timeout = 1;
+    static constexpr int keepalive_timeout = 3;
 
     char* it;
     char* end;
@@ -28,12 +28,12 @@ public:
         bytes_left = N;
     }
 
-    void receive();
-    void wait_for_count(size_t bytes);
-    void find_first_of(std::string_view matches);
-    void find(char match);
-    htpp::Request parse_request();
-    std::string_view receive_header_value();
-    void receive_headers();
-    void write_response(const htpp::Response& response);
+    asio::awaitable<void> receive();
+    asio::awaitable<void> wait_for_count(size_t bytes);
+    asio::awaitable<void> find_first_of(std::string_view matches);
+    asio::awaitable<void> find(char match);
+    asio::awaitable<htpp::Request> parse_request();
+    asio::awaitable<std::string_view> receive_header_value();
+    asio::awaitable<void> receive_headers();
+    asio::awaitable<void> write_response(const htpp::Response& response);
 };

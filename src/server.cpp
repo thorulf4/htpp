@@ -65,30 +65,39 @@ Response Server::fire_handler(const Request& request) const {
 }
 
 
-void Server::run() const {
-    asio::io_context context(std::thread::hardware_concurrency()-1);
-    tcp::acceptor accepter{context, tcp::endpoint{tcp::v4(), port}};
-    ThreadPool pool{5000};
+void Server::run() const{
+    asio::io_context context(std::thread::hardware_concurrency());
+    // ThreadPool pool{50};
+    
+    asio::co_spawn(context, [&]() mutable -> asio::awaitable<void> {
+        auto executor = co_await asio::this_coro::executor;
+        tcp::acceptor accepter{executor, tcp::endpoint{tcp::v4(), port}};
+        while(true){
+            auto socket = co_await accepter.async_accept(asio::use_awaitable);
+            asio::co_spawn(executor, [&, http = HttpConnection{std::move(socket)}]() mutable -> asio::awaitable<void> {
+                char read[1024*4096]; // Max request size set to 4MB
+                try{
+                    do{
+                        http.set_buffer(read);
+                        co_await http.receive();
+                        Request request = co_await http.parse_request();
+                        co_await http.receive_headers();
+                        for(const auto& mid : this->middlewares)
+                            mid->on_received(request);
+                        auto response = this->fire_handler(request);
+                        co_await http.write_response(response);
+                    } while(http.connection_keepalive > std::time(nullptr));
+                    co_return;
+                }
+                catch(...){ }
+                co_await http.write_response(Response{500, std::nullopt});
+            }, asio::detached);
+        }
+    }, asio::detached);
 
-    while(true){
-        pool.wait_for_space();
-        pool.queue_task([this, http = HttpConnection{accepter.accept()}] mutable {
-            char read[1024*4096]; // Max request size set to 4MB
-            try{
-                do{
-                    http.set_buffer(read);
-                    http.receive();
-                    Request request = http.parse_request();
-                    http.receive_headers();
-                    for(const auto& mid : this->middlewares)
-                        mid->on_received(request);
-                    auto response = this->fire_handler(request);
-                    http.write_response(response);
-                } while(http.connection_keepalive > std::time(nullptr) && http.connection_keepalive != std::numeric_limits<std::time_t>::max());
-            }
-            catch(...){
-                http.write_response(Response{500, std::nullopt});
-            }
-        });
-    }
+    std::vector<std::jthread> threads;
+    for(auto i = 1u; i < std::thread::hardware_concurrency(); i++)
+        threads.emplace_back([&](){context.run();});
+
+    context.run();
 }
