@@ -74,11 +74,9 @@ asio::awaitable<void> HttpConnection::receive_headers(){
         if(*it == ':'){
             it += 2; // Skip : and whitespace, not entirely robust
             if(key == "Connection"){
-                if(*it == 'K'){
-                    auto value = co_await receive_header_value();
-                    if(value != "keep-alive"){
-                        connection_keepalive = std::numeric_limits<std::time_t>::max();
-                    }
+                auto value = co_await receive_header_value();
+                if(value == "close"){
+                    connection_keepalive = std::numeric_limits<std::time_t>::max();
                 }else{
                     connection_keepalive = std::time(nullptr) + keepalive_timeout;
                 }
@@ -113,9 +111,12 @@ asio::awaitable<void> HttpConnection::write_response(const Response& response){
         s << "\r\n";
     }
 
+    
     co_await socket.async_write_some(asio::buffer(s.view()), asio::use_awaitable);
 }
 
 HttpConnection::~HttpConnection(){
+    if(socket.is_open())
+        socket.shutdown(asio::ip::tcp::socket::shutdown_send);
     socket.close();
 }
