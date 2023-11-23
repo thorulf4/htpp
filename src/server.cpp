@@ -1,5 +1,4 @@
 #include "htpp/lib.h"
-#include "threadpool.h"
 #include "connection.h"
 
 #include <string>
@@ -30,6 +29,10 @@ Server& Server::set_routes(std::vector<WebPoint> new_routes) {
     return *this;
 }
 
+Server& Server::set_threads(uint32_t count) {
+    thread_count = count;
+    return *this;
+}
 
 Server& Server::static_files(std::string directory, std::filesystem::path static_path) {
     this->static_path = std::move(static_path);
@@ -67,7 +70,6 @@ Response Server::fire_handler(const Request& request) const {
 
 void Server::run() const{
     asio::io_context context(std::thread::hardware_concurrency());
-    // ThreadPool pool{50};
     
     asio::co_spawn(context, [&]() mutable -> asio::awaitable<void> {
         auto executor = co_await asio::this_coro::executor;

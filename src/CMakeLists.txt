@@ -1,4 +1,4 @@
-add_library(htpp server.cpp threadpool.cpp connection.cpp)
+add_library(htpp server.cpp connection.cpp)
 target_compile_definitions(htpp PRIVATE HTPP_VERSION="${HTPP_VERSION}")
 target_link_libraries(htpp PRIVATE asio)
 target_compile_options(htpp PRIVATE -Wall -Wpedantic -Wconversion -Wextra -Wswitch-enum)

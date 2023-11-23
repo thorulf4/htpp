@@ -6,6 +6,7 @@
 #include <string_view>
 #include <memory>
 #include <optional>
+#include <thread>
 #include <unordered_map>
 
 namespace htpp{
@@ -28,6 +29,7 @@ namespace htpp{
         std::string static_dir;
         std::filesystem::path static_path;
         std::vector<std::unique_ptr<Middleware>> middlewares;
+        uint32_t thread_count{std::thread::hardware_concurrency()};
         
         Response fire_handler(const Request&) const;
     public:
@@ -35,6 +37,7 @@ namespace htpp{
 
         Server& set_routes(std::vector<WebPoint> routes);
         Server& static_files(std::string directory, std::filesystem::path static_path);
+        Server& set_threads(uint32_t count);
         void run() const;
 
         template<typename T, typename ... Params>
