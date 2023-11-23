@@ -11,7 +11,7 @@ using namespace htpp;
 
 asio::awaitable<void> HttpConnection::receive(){
     while(socket.available() == 0){
-        if(connection_keepalive < std::time(nullptr)){
+        if(connection_keepalive < std::time(nullptr) || !socket.is_open()){
             throw std::logic_error{"Timed out"}; // Convert to return value error handling or custom exception
         }
     }

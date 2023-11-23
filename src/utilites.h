@@ -77,15 +77,6 @@ static std::string_view month(const tm& time){
     std::unreachable();
 }
 
-static std::string_view to_str(htpp::ContentType type){
-    using enum htpp::ContentType;
-    switch(type){
-        case TextHtml: return "text/html";
-        case ApplicationJson: return "application/json";
-    }
-    std::unreachable();
-}
-
 // Formats an integer with XX format e.g 05, 23 or 00 
 class Fmt2Int{
     int v;

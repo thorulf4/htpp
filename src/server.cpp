@@ -40,13 +40,13 @@ Server& Server::static_files(std::string directory, std::filesystem::path static
     return *this;
 }
 
-static Response read_file(const std::filesystem::path& path){
+static std::string read_file(const std::filesystem::path& path){
     std::string text;
     std::ifstream file{path, std::ios::ate | std::ios::binary};
     text.reserve(file.tellg());
     file.seekg(0, std::ios::beg);
     text.append(std::istreambuf_iterator{file}, {});
-    return {200, text};
+    return text;
 }
 
 Response Server::fire_handler(const Request& request) const {
@@ -54,10 +54,22 @@ Response Server::fire_handler(const Request& request) const {
         if(request.url.contains(".."))
             return {404, ERROR_404};
         auto path = static_path / request.url.substr(static_dir.size());
-        if(std::filesystem::is_directory(path))
+        
+        ContentType type; // Default for safety
+        if(std::filesystem::is_directory(path)){
             path = path / "index.html";
-        if(std::filesystem::exists(path))
-            return read_file(path);
+            type = ContentType::TextHtml;
+        } else {
+            std::size_t pos = request.url.find_last_of('.');
+            if(pos == std::string::npos)
+                type = ContentType::ApplicationOctetStream;
+            else
+                type = from_file_extension(request.url.substr(pos));
+        }
+            
+        if(std::filesystem::exists(path)){
+            return Content{type, read_file(path)};
+        }
     }
 
     auto it = routes.find({request.type, request.url});
@@ -69,11 +81,11 @@ Response Server::fire_handler(const Request& request) const {
 
 
 void Server::run() const{
-    asio::io_context context(std::thread::hardware_concurrency());
-    
+    asio::io_context context(thread_count);
     asio::co_spawn(context, [&]() mutable -> asio::awaitable<void> {
         auto executor = co_await asio::this_coro::executor;
         tcp::acceptor accepter{executor, tcp::endpoint{tcp::v4(), port}};
+        // accepter.set_option(asio::ip::tcp::no_delay(true));
         while(true){
             auto socket = co_await accepter.async_accept(asio::use_awaitable);
             asio::co_spawn(executor, [&, http = HttpConnection{std::move(socket)}]() mutable -> asio::awaitable<void> {
@@ -92,13 +104,13 @@ void Server::run() const{
                     co_return;
                 }
                 catch(...){ }
-                co_await http.write_response(Response{500, std::nullopt});
+                co_await http.write_response(Response{500});
             }, asio::detached);
         }
     }, asio::detached);
 
     std::vector<std::jthread> threads;
-    for(auto i = 1u; i < std::thread::hardware_concurrency(); i++)
+    for(auto i = 1u; i < thread_count; i++)
         threads.emplace_back([&](){context.run();});
 
     context.run();

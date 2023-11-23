@@ -118,7 +118,7 @@ namespace json{
 
     
     struct From : public htpp::Response{
-        explicit From(const auto& object) {
+        explicit From(const auto& object) : Response{200} {
             std::stringstream s;
             inner::serialize(s, object);
             content = {htpp::ContentType::ApplicationJson, std::move(s).str()};

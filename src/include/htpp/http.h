@@ -18,9 +18,78 @@ namespace htpp{
     };
 
     enum class ContentType{
+        AudioAac,
+        ApplicationXAbiWord,
+        ApplicationXFreeArc,
+        ImageAvif,
+        VideoXMsVideo,
+        ApplicationVndAmazonEbook,
+        ImageBmp,
+        ApplicationXBzip,
+        ApplicationXBzip2,
+        ApplicationXCdf,
+        ApplicationXCsh,
+        TextCsv,
+        ApplicationMsWord,
+        ApplicationVndOpenXMLWord,
+        ApplicationVndMsFont,
+        ApplicationEPub,
+        ApplicationGZip,
+        ImageGif,
+        ImageVndMicrosoftIcon,
+        TextCalendar,
+        ApplicationJavaArchive,
+        ApplicationLdJson,
+        AudioMidi,
+        ImageJpeg,
+        AudioMpeg,
+        VideoMp4,
+        VideoMpeg,
+        ApplicationBndAppleInstaller,
+        ApplicationVndOasisOpenPresentation,
+        ApplicationVndOasisOpenSpreadsheet,
+        ApplicationVndOasisOpenText,
+        AudioOgg,
+        VideoOgg,
+        ApplicationOgg,
+        FontOft,
+        AudioOpus,
+        ImagePng,
+        ApplicationPdf,
+        ApplicationXHttpdPhp,
+        ApplicationVndMsPowerpoint,
+        ApplicationVndOpenXMLPresentation,
+        ApplicationVndRar,
+        ApplicationRTF,
+        ApplicationXSh,
+        ImageSvg,
+        ApplicationXTar,
+        ImageTiff,
+        VideoMp2t,
+        ApplicationVndVisio,
+        AudioWav,
+        AudioWebm,
+        VideoWebm,
+        ImageWebp,
+        FontWoff,
+        FontWoff2,
+        ApplicationXHtml,
+        ApplicationVndMsExcel,
+        ApplicationVndOpenXMLSpreadsheet,
+        ApplicationXml,
+        ApplicationVndMozillaXul,
+        ApplicationZip,
+        Application7Zip,
+        TextPlain,
         TextHtml,
-        ApplicationJson
+        TextCss,
+        TextJavascript,
+        ApplicationJson,
+        ApplicationOctetStream // Default, provides some safety
     };
+
+    ContentType from_file_extension(std::string_view extension);
+    std::string_view to_str(ContentType type);
 
     struct Content{
         ContentType type;
@@ -33,6 +102,9 @@ namespace htpp{
     struct Response {
         int response_code{200};
         std::optional<Content> content{std::nullopt};
+        explicit Response(int response_code): response_code{response_code} {}
+        Response(Content content): content{std::move(content)} {}
+        Response(int response_code, Content content): response_code{response_code}, content{std::move(content)} {}
     };
 
     struct Request{
