@@ -14,6 +14,9 @@ asio::awaitable<void> HttpConnection::receive(){
         if(connection_keepalive < std::time(nullptr) || !socket.is_open()){
             throw std::logic_error{"Timed out"}; // Convert to return value error handling or custom exception
         }
+        auto timer = asio::high_resolution_timer{socket.get_executor()};
+        timer.expires_after(std::chrono::milliseconds(10));
+        co_await timer.async_wait(asio::use_awaitable);
     }
     auto count = co_await socket.async_receive(asio::buffer(end, bytes_left), asio::use_awaitable);
     end += count;
@@ -99,7 +102,7 @@ asio::awaitable<void> HttpConnection::write_response(const Response& response){
     s << "Date: " << weekday(utc) << ", " << Fmt2Int{utc.tm_mday} << ' ' << month(utc) << ' ' << (utc.tm_year + 1900) << ' ' << Fmt2Int{utc.tm_hour} << ':' << Fmt2Int{utc.tm_min} << ':' << Fmt2Int{utc.tm_sec} << " GMT\r\n";
     if(connection_keepalive < std::numeric_limits<std::time_t>::max()){
         s << "Connection: keep-alive\r\n";
-        s << "Keep-Alive: timeout=3, max=1000\r\n";
+        s << "Keep-Alive: timeout=" << keepalive_timeout << ", max=1000\r\n";
     }else{
         s << "Connection: close\r\n";
     }

@@ -5,7 +5,7 @@
 #include <limits>
 
 class HttpConnection{
-    static constexpr int keepalive_timeout = 3;
+    static constexpr int keepalive_timeout = 30;
 
     char* it;
     char* end;

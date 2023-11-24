@@ -103,7 +103,7 @@ void Server::run() const{
                     } while(http.connection_keepalive > std::time(nullptr));
                     co_return;
                 }
-                catch(...){ }
+                catch(...){}
                 co_await http.write_response(Response{500});
             }, asio::detached);
         }
