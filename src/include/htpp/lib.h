@@ -22,22 +22,30 @@ namespace htpp{
         virtual void on_received(const Request& request) = 0;
     };
 
+    struct SslConfig{
+        std::string cert_path;
+        std::string private_key;
+    };
+
 
     class Server{
         uint16_t port;
         std::unordered_map<Endpoint, WebPoint::Handler> routes;
         std::string static_dir;
         std::filesystem::path static_path;
-        std::vector<std::unique_ptr<Middleware>> middlewares;
         uint32_t thread_count{std::thread::hardware_concurrency()};
+        std::optional<SslConfig> ssl_config;
         
-        Response fire_handler(const Request&) const;
     public:
         Server(uint16_t port = 80): port{port} {}
 
+        Response fire_handler(const Request&) const;
+        std::vector<std::unique_ptr<Middleware>> middlewares;
+
         Server& set_routes(std::vector<WebPoint> routes);
-        Server& static_files(std::string directory, std::filesystem::path static_path);
+        Server& set_static_files(std::string directory, std::filesystem::path static_path);
         Server& set_threads(uint32_t count);
+        Server& use_https(std::string key_path, std::string private_path);
         void run() const;
 
         template<typename T, typename ... Params>

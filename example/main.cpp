@@ -49,8 +49,9 @@ int main(){
     using enum htpp::RequestType;
 
     htpp::Server{}
-        .static_files("/", STATIC_FILE_DIR)
-        // .add_middleware<Logger>(std::cout)
+        .set_threads(6)
+        .set_static_files("/", STATIC_FILE_DIR)
+        .add_middleware<Logger>(std::cout)
         .set_routes({
             {GET, "/json", handle_json},
             {GET, "/api/time", handle_time}

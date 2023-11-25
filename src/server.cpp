@@ -1,5 +1,7 @@
 #include "htpp/lib.h"
 #include "connection.h"
+#include "simple_connection.h"
+#include "ssl_connection.h"
 
 #include <string>
 #include <numeric>
@@ -34,9 +36,14 @@ Server& Server::set_threads(uint32_t count) {
     return *this;
 }
 
-Server& Server::static_files(std::string directory, std::filesystem::path static_path) {
+Server& Server::set_static_files(std::string directory, std::filesystem::path static_path) {
     this->static_path = std::move(static_path);
     static_dir = std::move(directory);
+    return *this;
+}
+
+Server& Server::use_https(std::string key_path, std::string private_path) {
+    ssl_config = SslConfig{std::move(key_path), std::move(private_path)};
     return *this;
 }
 
@@ -79,35 +86,57 @@ Response Server::fire_handler(const Request& request) const {
     return handler(request.param);
 }
 
+template<Connection ConnectionType>
+void handle_connection(const Server& server, ConnectionType connection){
+    asio::co_spawn(connection.get_executor(), [&, http = HttpProtocol<ConnectionType>{std::move(connection)}]() mutable -> asio::awaitable<void> {
+        char read[1024*4096]; // Max request size set to 4MB
+        try{
+            co_await http.init();
+            do{
+                http.set_buffer(read);
+                co_await http.receive();
+                Request request = co_await http.parse_request();
+                co_await http.receive_headers();
+                for(const auto& mid : server.middlewares)
+                    mid->on_received(request);
+                auto response = server.fire_handler(request);
+                co_await http.write_response(response);
+            } while(http.connection_keepalive > std::time(nullptr));
+            co_await http.close();
+            co_return;
+        }
+        catch(...){}
+        co_await http.write_response(Response{500});
+        co_await http.close();
+    }, asio::detached);
+}
 
 void Server::run() const{
     asio::io_context context(thread_count);
+
     asio::co_spawn(context, [&]() mutable -> asio::awaitable<void> {
-        auto executor = co_await asio::this_coro::executor;
-        tcp::acceptor accepter{executor, tcp::endpoint{tcp::v4(), port}};
-        // accepter.set_option(asio::ip::tcp::no_delay(true));
+        tcp::acceptor accepter{context, tcp::endpoint{tcp::v4(), port}};
         while(true){
             auto socket = co_await accepter.async_accept(asio::use_awaitable);
-            asio::co_spawn(executor, [&, http = HttpConnection{std::move(socket)}]() mutable -> asio::awaitable<void> {
-                char read[1024*4096]; // Max request size set to 4MB
-                try{
-                    do{
-                        http.set_buffer(read);
-                        co_await http.receive();
-                        Request request = co_await http.parse_request();
-                        co_await http.receive_headers();
-                        for(const auto& mid : this->middlewares)
-                            mid->on_received(request);
-                        auto response = this->fire_handler(request);
-                        co_await http.write_response(response);
-                    } while(http.connection_keepalive > std::time(nullptr));
-                    co_return;
-                }
-                catch(...){}
-                co_await http.write_response(Response{500});
-            }, asio::detached);
+            handle_connection(*this, SimpleConnection{std::move(socket)});
         }
     }, asio::detached);
+
+    
+    asio::ssl::context ssl_ctx{asio::ssl::context::tls_server};
+    if(ssl_config.has_value()){
+        ssl_ctx.use_certificate_file(ssl_config->cert_path, asio::ssl::context_base::pem);
+        ssl_ctx.use_private_key_file(ssl_config->private_key, asio::ssl::context_base::pem);
+        ssl_ctx.set_verify_mode(asio::ssl::verify_none);
+
+        asio::co_spawn(context, [&]() mutable -> asio::awaitable<void> {
+            tcp::acceptor accepter{context, tcp::endpoint{tcp::v4(), 443}};
+            while(true){
+                auto socket = co_await accepter.async_accept(asio::use_awaitable);
+                handle_connection(*this, SslConnection{std::move(socket), ssl_ctx});
+            }
+        }, asio::detached);
+    }
 
     std::vector<std::jthread> threads;
     for(auto i = 1u; i < thread_count; i++)

@@ -1,6 +1,6 @@
-add_library(htpp server.cpp connection.cpp contenttype.cpp)
+add_library(htpp server.cpp contenttype.cpp)
 target_compile_definitions(htpp PRIVATE HTPP_VERSION="${HTPP_VERSION}")
-target_link_libraries(htpp PRIVATE asio)
+target_link_libraries(htpp PRIVATE asio OpenSSL::SSL)
 target_compile_options(htpp PRIVATE -Wall -Wpedantic -Wconversion -Wextra -Wswitch-enum)
 
 target_sources(htpp PUBLIC

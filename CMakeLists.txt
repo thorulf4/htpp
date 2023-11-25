@@ -11,6 +11,8 @@ add_library(asio INTERFACE)
 target_compile_definitions(asio INTERFACE ASIO_STANDALONE)
 target_link_libraries(asio INTERFACE pthread)
 
+find_package(OpenSSL REQUIRED)
+
 if(ASAN)
     add_compile_options(-fsanitize=address)
     add_link_options(-fsanitize=address)
