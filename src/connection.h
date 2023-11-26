@@ -56,7 +56,7 @@ public:
                 throw std::logic_error{"Timed out"}; // Convert to return value error handling or custom exception
             }
             auto timer = asio::high_resolution_timer{connection.get_executor()};
-            timer.expires_after(std::chrono::milliseconds(10));
+            timer.expires_after(std::chrono::nanoseconds(10));
             co_await timer.async_wait(asio::use_awaitable);
         }
         auto count = co_await connection.receive(asio::buffer(end, bytes_left));
