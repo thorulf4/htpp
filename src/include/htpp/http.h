@@ -91,21 +91,37 @@ namespace htpp{
     ContentType from_file_extension(std::string_view extension);
     std::string_view to_str(ContentType type);
 
-    struct Content{
-        ContentType type;
-        std::string data;
-
-        constexpr Content(ContentType type, std::string data): type{type}, data{std::move(data)} {}
-        constexpr Content(std::string data): type{ContentType::TextHtml}, data{std::move(data)} {}
+    template<typename T>
+    concept ContentConcept = requires (T t, std::stringstream s) {
+        {t.print_content(s)};
+        {t.content_type()} -> std::same_as<htpp::ContentType>;
     };
 
-    struct Response {
-        int response_code{200};
-        std::optional<Content> content{std::nullopt};
-        explicit Response(int response_code): response_code{response_code} {}
-        Response(Content content): content{std::move(content)} {}
-        Response(int response_code, Content content): response_code{response_code}, content{std::move(content)} {}
+    template<typename T>
+    concept SizedContentConcept = ContentConcept<T> && requires (T t) {
+        {t.content_size()} -> std::same_as<std::size_t>;
     };
+
+    template<typename T>
+    concept ResponseConcept = requires (const T t, std::stringstream s) {
+        {t.response_code()} -> std::same_as<uint16_t>;
+        {t.header_line(s)};
+    };
+
+    struct OkResponse{
+        uint16_t response_code() const { return 200; }
+        void header_line(std::stringstream&) const {}
+    };
+    static_assert(ResponseConcept<OkResponse>);
+
+    class Response {
+        uint16_t code;
+    public:
+        explicit Response(uint16_t code): code{code} {}
+        uint16_t response_code() const { return code; }
+        void header_line(std::stringstream&) const {}
+    };
+    static_assert(ResponseConcept<Response>);
 
     struct Request{
         RequestType type;

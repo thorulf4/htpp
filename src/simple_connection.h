@@ -1,5 +1,6 @@
 #pragma once
 #include <asio.hpp>
+#include <iostream>
 
 class SimpleConnection {
     asio::ip::tcp::socket socket;
@@ -12,10 +13,10 @@ public:
 
     asio::awaitable<void> init(){ co_return; }
     asio::awaitable<std::size_t> receive(asio::mutable_buffer buffer) {
-        co_await socket.async_receive(buffer, asio::use_awaitable);
+        return socket.async_receive(buffer, asio::use_awaitable);
     }
-    asio::awaitable<void> write(asio::const_buffer data) {
-        co_await socket.async_write_some(data, asio::use_awaitable);
+    void write(asio::const_buffer data) {
+        socket.write_some(data);
     }
     std::size_t available(){
         return socket.available();
@@ -29,8 +30,8 @@ public:
     asio::awaitable<void> close(){
         if(socket.is_open()){
             socket.shutdown(asio::ip::tcp::socket::shutdown_send);
-            socket.close();
         }
+        socket.close();
         co_return;
     }
 };

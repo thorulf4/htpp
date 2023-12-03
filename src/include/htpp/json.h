@@ -117,11 +117,13 @@ namespace json{
     }
 
     
-    struct From : public htpp::Response{
-        explicit From(const auto& object) : Response{200} {
-            std::stringstream s;
+    template<typename T>
+    struct From : public htpp::OkResponse{
+        const T& object; // this storage could be problematic
+        explicit From(const T& object): object{object} {}
+        void print_content(std::stringstream& s) const {
             inner::serialize(s, object);
-            content = {htpp::ContentType::ApplicationJson, std::move(s).str()};
         }
+        htpp::ContentType content_type() const { return htpp::ContentType::ApplicationJson; }
     };
 }

@@ -1,4 +1,5 @@
-#include "htpp/lib.h"
+#include <htpp/response.h>
+#include <htpp/lib.h>
 #include "connection.h"
 #include "simple_connection.h"
 #include "ssl_connection.h"
@@ -23,7 +24,17 @@ using asio::ip::tcp;
 using namespace std::literals::string_view_literals;
 using namespace htpp;
 
-static auto ERROR_404 = Content{ContentType::TextHtml, "404 Not Found"};
+constexpr static auto ERROR_404 = "404 Not Found";
+
+class StringResponse : public Response{
+    std::string_view content;
+public:
+    StringResponse(uint16_t code, std::string_view content): Response{code}, content{content} {}
+    void print_content(std::stringstream& s) const { s << content; }
+    ContentType content_type() const { return ContentType::TextPlain; }
+    std::size_t content_size() const { return content.size(); }
+};
+static_assert(SizedContentConcept<StringResponse>);
 
 Server& Server::set_routes(std::vector<WebPoint> new_routes) {
     for(const WebPoint& route : new_routes)
@@ -47,20 +58,33 @@ Server& Server::use_https(std::string key_path, std::string private_path) {
     return *this;
 }
 
-static std::string read_file(const std::filesystem::path& path){
-    std::string text;
-    std::ifstream file{path, std::ios::ate | std::ios::binary};
-    text.reserve(file.tellg());
-    file.seekg(0, std::ios::beg);
-    text.append(std::istreambuf_iterator{file}, {});
-    return text;
-}
+// Fake const here, beware
+class FileResponse : public OkResponse{
+    ContentType type;
+    std::size_t file_size;
+    mutable std::ifstream file;
+public:
+    FileResponse(ContentType type, const std::filesystem::path& path): type{type}, file{path, std::ios::ate | std::ios::binary}{
+        file_size = file.tellg();
+        file.seekg(0, std::ios::beg);
+    }
+    ContentType content_type() const { return type; }
+    std::size_t content_size() const { return file_size; }
+    void print_content(std::stringstream& s) const {
+        s << file.rdbuf();
+        file.seekg(0, std::ios::beg); // Preserve fake constness
+    }
+};
+static_assert( SizedContentConcept<FileResponse> );
 
-Response Server::fire_handler(const Request& request) const {
-    if(request.url.starts_with(static_dir)){
-        if(request.url.contains(".."))
-            return {404, ERROR_404};
-        auto path = static_path / request.url.substr(static_dir.size());
+template<typename T>
+void fire_handler(const Server& server, const Request& request, HttpProtocol<T>& http) {
+    if(request.url.starts_with(server.static_dir)){
+        if(request.url.contains("..")){
+            http.send(StringResponse{404, ERROR_404});
+            return;
+        }
+        auto path = server.static_path / request.url.substr(server.static_dir.size());
         
         ContentType type; // Default for safety
         if(std::filesystem::is_directory(path)){
@@ -73,17 +97,20 @@ Response Server::fire_handler(const Request& request) const {
             else
                 type = from_file_extension(request.url.substr(pos));
         }
-            
+
         if(std::filesystem::exists(path)){
-            return Content{type, read_file(path)};
+            http.send(FileResponse{type, path});
+            return;
         }
     }
 
-    auto it = routes.find({request.type, request.url});
-    if(it == routes.end())
-        return {404, ERROR_404};
+    auto it = server.routes.find({request.type, request.url});
+    if(it == server.routes.end()){
+        http.send(StringResponse{404, ERROR_404});
+        return;
+    }
     const WebPoint::Handler handler = it->second;
-    return handler(request.param);
+    handler(http, request.param);
 }
 
 template<Connection ConnectionType>
@@ -94,19 +121,16 @@ void handle_connection(const Server& server, ConnectionType connection){
             co_await http.init();
             do{
                 http.set_buffer(read);
-                co_await http.receive();
                 Request request = co_await http.parse_request();
                 co_await http.receive_headers();
                 for(const auto& mid : server.middlewares)
                     mid->on_received(request);
-                auto response = server.fire_handler(request);
-                co_await http.write_response(response);
+                fire_handler(server, request, http);
             } while(http.connection_keepalive > std::time(nullptr));
-            co_await http.close();
-            co_return;
         }
-        catch(...){}
-        co_await http.write_response(Response{500});
+        catch(std::exception& e){
+            std::cout << e.what() << std::endl;
+        }
         co_await http.close();
     }, asio::detached);
 }

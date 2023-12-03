@@ -1,5 +1,5 @@
 #pragma once
-#include <htpp/http.h>
+#include <htpp/response.h>
 #include <string_view>
 #include <vector>
 #include <filesystem>
@@ -8,10 +8,11 @@
 #include <optional>
 #include <thread>
 #include <unordered_map>
+#include <sstream>
 
 namespace htpp{
     struct WebPoint : Endpoint{
-        using Handler = Response(*)(std::string_view);
+        using Handler = void(*)(Context&, std::string_view);
         Handler function;
     };
 
@@ -29,6 +30,7 @@ namespace htpp{
 
 
     class Server{
+    public:
         uint16_t port;
         std::unordered_map<Endpoint, WebPoint::Handler> routes;
         std::string static_dir;
@@ -36,10 +38,8 @@ namespace htpp{
         uint32_t thread_count{std::thread::hardware_concurrency()};
         std::optional<SslConfig> ssl_config;
         
-    public:
         Server(uint16_t port = 80): port{port} {}
 
-        Response fire_handler(const Request&) const;
         std::vector<std::unique_ptr<Middleware>> middlewares;
 
         Server& set_routes(std::vector<WebPoint> routes);

@@ -16,13 +16,13 @@ struct TimeResponse{
     int seconds;
 };
 
-htpp::Response handle_time(std::string_view){
+void handle_time(htpp::Context& ctx, std::string_view){
     std::time_t t = std::time(nullptr);
     std::tm* now = std::localtime(&t);
     
     auto time = TimeResponse{now->tm_hour, now->tm_min, now->tm_sec};
 
-    return json::From(time);
+    ctx.send(json::From(time));
 }
 
 struct Msg{
@@ -30,8 +30,8 @@ struct Msg{
     std::string_view msg;
 };
 
-htpp::Response handle_json(std::string_view){
-    return json::From(Msg{"Hello, World!"});
+void handle_json(htpp::Context& ctx, std::string_view){
+    ctx.send(json::From(Msg{"Hello, World!"}));
 }
 
 class Logger : public htpp::Middleware{
@@ -49,7 +49,8 @@ int main(){
     using enum htpp::RequestType;
 
     htpp::Server{}
-        .set_threads(6)
+        // .use_https("certificate.pem", "privatekey.pem")
+        .set_threads(2)
         .set_static_files("/", STATIC_FILE_DIR)
         .add_middleware<Logger>(std::cout)
         .set_routes({
