@@ -16,13 +16,12 @@ struct TimeResponse{
     int seconds;
 };
 
-void handle_time(htpp::Context& ctx, std::string_view){
+asio::awaitable<void> handle_time(htpp::Context& ctx, std::string_view){
     std::time_t t = std::time(nullptr);
     std::tm* now = std::localtime(&t);
-    
     auto time = TimeResponse{now->tm_hour, now->tm_min, now->tm_sec};
 
-    ctx.send(json::From(time));
+    return ctx.send(json::From(time));
 }
 
 struct Msg{
@@ -30,8 +29,8 @@ struct Msg{
     std::string_view msg;
 };
 
-void handle_json(htpp::Context& ctx, std::string_view){
-    ctx.send(json::From(Msg{"Hello, World!"}));
+asio::awaitable<void> handle_json(htpp::Context& ctx, std::string_view){
+    return ctx.send(json::From(Msg{"Hello, World!"}));
 }
 
 class Logger : public htpp::Middleware{
@@ -49,8 +48,8 @@ int main(){
     using enum htpp::RequestType;
 
     htpp::Server{}
-        // .use_https("certificate.pem", "privatekey.pem")
-        .set_threads(2)
+        // .use_https("localhost.pem", "localhost-key.pem")
+        .set_threads(4)
         .set_static_files("/", STATIC_FILE_DIR)
         .add_middleware<Logger>(std::cout)
         .set_routes({

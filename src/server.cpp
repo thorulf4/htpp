@@ -78,11 +78,10 @@ public:
 static_assert( SizedContentConcept<FileResponse> );
 
 template<typename T>
-void fire_handler(const Server& server, const Request& request, HttpProtocol<T>& http) {
+[[nodiscard]] asio::awaitable<void> fire_handler(const Server& server, const Request& request, HttpProtocol<T>& http) {
     if(request.url.starts_with(server.static_dir)){
         if(request.url.contains("..")){
-            http.send(StringResponse{404, ERROR_404});
-            return;
+            return http.send(StringResponse{404, ERROR_404});
         }
         auto path = server.static_path / request.url.substr(server.static_dir.size());
         
@@ -99,18 +98,16 @@ void fire_handler(const Server& server, const Request& request, HttpProtocol<T>&
         }
 
         if(std::filesystem::exists(path)){
-            http.send(FileResponse{type, path});
-            return;
+            return http.send(FileResponse{type, path});
         }
     }
 
     auto it = server.routes.find({request.type, request.url});
     if(it == server.routes.end()){
-        http.send(StringResponse{404, ERROR_404});
-        return;
+        return http.send(StringResponse{404, ERROR_404});
     }
     const WebPoint::Handler handler = it->second;
-    handler(http, request.param);
+    return handler(http, request.param);
 }
 
 template<Connection ConnectionType>
@@ -125,11 +122,11 @@ void handle_connection(const Server& server, ConnectionType connection){
                 co_await http.receive_headers();
                 for(const auto& mid : server.middlewares)
                     mid->on_received(request);
-                fire_handler(server, request, http);
+                co_await fire_handler(server, request, http);
             } while(http.connection_keepalive > std::time(nullptr));
         }
         catch(std::exception& e){
-            std::cout << e.what() << std::endl;
+            // std::cout << e.what() << std::endl;
         }
         co_await http.close();
     }, asio::detached);

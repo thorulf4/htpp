@@ -12,7 +12,7 @@
 
 namespace htpp{
     struct WebPoint : Endpoint{
-        using Handler = void(*)(Context&, std::string_view);
+        using Handler = asio::awaitable<void>(*)(Context&, std::string_view);
         Handler function;
     };
 

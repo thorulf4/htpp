@@ -4,6 +4,7 @@
 #include <optional>
 #include <functional>
 #include <iostream>
+#include <asio/awaitable.hpp>
 
 namespace htpp
 {
@@ -11,12 +12,12 @@ namespace htpp
     protected:
         std::stringstream response_buffer;
         virtual void default_headers() = 0;
-        virtual void send_response() = 0;
+        [[nodiscard]] virtual asio::awaitable<void> send_response() = 0;
     public:
         // Don't override destructor, we shouldn't need it
 
         template<ResponseConcept ResponseType>
-        void send(const ResponseType& response){
+        [[nodiscard]] asio::awaitable<void> send(const ResponseType& response){
             std::stringstream& s = response_buffer;
             s << "HTTP/1.1 " << response.response_code();
             response.header_line(s);
@@ -37,7 +38,7 @@ namespace htpp
             }else{
                 s << "\r\n";
             }
-            send_response();
+            return send_response();
         }
     };
 } // namespace htpp

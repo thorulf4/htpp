@@ -15,7 +15,7 @@ template<typename T>
 concept Connection = requires (T t) {
     {t.init()} -> std::same_as<asio::awaitable<void>>;
     {t.receive(asio::mutable_buffer{})} -> std::same_as<asio::awaitable<std::size_t>>;
-    {t.write(asio::const_buffer{})};
+    {t.write(asio::const_buffer{})} -> std::same_as<asio::awaitable<size_t>>;
     {t.available()} -> std::same_as<std::size_t>;
     {t.get_executor()} -> std::same_as<asio::any_io_executor>;
     {t.is_open()} -> std::same_as<bool>;
@@ -148,8 +148,8 @@ public:
         }
     }
 
-    void send_response() {
-        connection.write(asio::buffer(response_buffer.view()));
+    [[nodiscard]] asio::awaitable<void> send_response() {
+        co_await connection.write(asio::buffer(response_buffer.view()));
         response_buffer.rdbuf()->pubseekpos(0);
     }
 };

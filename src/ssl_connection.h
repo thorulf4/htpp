@@ -13,14 +13,14 @@ public:
     SslConnection(SslConnection&&) noexcept = default;
     SslConnection& operator=(SslConnection&&) noexcept = default;
 
-    asio::awaitable<void> init(){
+    [[nodiscard]] asio::awaitable<void> init(){
         return socket.async_handshake(asio::ssl::stream_base::server, asio::use_awaitable);
     }
-    asio::awaitable<std::size_t> receive(asio::mutable_buffer buffer) {
+    [[nodiscard]] asio::awaitable<std::size_t> receive(asio::mutable_buffer buffer) {
         return socket.async_read_some(buffer, asio::use_awaitable);
     }
-    void write(asio::const_buffer data) {
-        socket.write_some(data);
+    [[nodiscard]] asio::awaitable<size_t> write(asio::const_buffer data) {
+        return asio::async_write(socket, data, asio::use_awaitable);
     }
     std::size_t available(){
         return socket.lowest_layer().available();
@@ -31,7 +31,7 @@ public:
     bool is_open(){
         return socket.lowest_layer().is_open();
     }
-    asio::awaitable<void> close(){
+    [[nodiscard]] asio::awaitable<void> close(){
         if(socket.lowest_layer().is_open()){
             co_await socket.async_shutdown(asio::use_awaitable);
         }

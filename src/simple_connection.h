@@ -11,23 +11,23 @@ public:
     SimpleConnection(SimpleConnection&&) noexcept = default;
     SimpleConnection& operator=(SimpleConnection&&) noexcept = default;
 
-    asio::awaitable<void> init(){ co_return; }
-    asio::awaitable<std::size_t> receive(asio::mutable_buffer buffer) {
+    [[nodiscard]] asio::awaitable<void> init(){ co_return; }
+    [[nodiscard]] asio::awaitable<std::size_t> receive(asio::mutable_buffer buffer) {
         return socket.async_receive(buffer, asio::use_awaitable);
     }
-    void write(asio::const_buffer data) {
-        socket.write_some(data);
+    [[nodiscard]] asio::awaitable<size_t> write(asio::const_buffer data) {
+        return asio::async_write(socket, data, asio::use_awaitable);
     }
     std::size_t available(){
         return socket.available();
     }
-    asio::any_io_executor get_executor() {
+    [[nodiscard]] asio::any_io_executor get_executor() {
         return socket.get_executor();
     }
     bool is_open(){
         return socket.is_open();
     }
-    asio::awaitable<void> close(){
+    [[nodiscard]] asio::awaitable<void> close(){
         if(socket.is_open()){
             socket.shutdown(asio::ip::tcp::socket::shutdown_send);
         }
